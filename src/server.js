@@ -29,7 +29,7 @@ function broadcastPending() {
         dashboardClients.delete(clientRes);
       }
     } catch (err) {
-      console.error('[AgentRelay] Error broadcasting to client:', err);
+      console.error('[AgentPipe] Error broadcasting to client:', err);
       dashboardClients.delete(clientRes);
     }
   }
@@ -133,11 +133,11 @@ const server = http.createServer(async (req, res) => {
       });
 
       dashboardClients.add(res);
-      console.log(`[AgentRelay] Dashboard SSE client connected. Total clients: ${dashboardClients.size}`);
+      console.log(`[AgentPipe] Dashboard SSE client connected. Total clients: ${dashboardClients.size}`);
 
       req.on('close', () => {
         dashboardClients.delete(res);
-        console.log(`[AgentRelay] Dashboard SSE client disconnected. Total clients: ${dashboardClients.size}`);
+        console.log(`[AgentPipe] Dashboard SSE client disconnected. Total clients: ${dashboardClients.size}`);
       });
 
       // Immediately send current pending list on connection
@@ -151,7 +151,7 @@ const server = http.createServer(async (req, res) => {
         object: 'list',
         data: [
           {
-            id: 'agent-relay',
+            id: 'agent-pipe',
             object: 'model',
             created: 123456789,
             owned_by: 'custom'
@@ -177,7 +177,7 @@ const server = http.createServer(async (req, res) => {
       const id = `req_${Date.now()}`;
       store.addRequest(id, req, res, data.messages || [], data.tools || []);
 
-      console.log(`[AgentRelay] Intercepted chat completion request: ${id}`);
+      console.log(`[AgentPipe] Intercepted chat completion request: ${id}`);
 
       // Broadcast update to all connected dashboard SSE clients
       broadcastPending();
@@ -185,7 +185,7 @@ const server = http.createServer(async (req, res) => {
       // Handle client disconnect or abort
       req.on('close', () => {
         if (!res.writableEnded) {
-          console.log(`[AgentRelay] Client disconnected/aborted request: ${id}`);
+          console.log(`[AgentPipe] Client disconnected/aborted request: ${id}`);
           store.removeRequest(id);
           broadcastPending();
         }
@@ -232,7 +232,7 @@ const server = http.createServer(async (req, res) => {
       sendSSEResponse(storedReq.res, payload);
       store.removeRequest(id);
 
-      console.log(`[AgentRelay] Successfully resolved request: ${id}`);
+      console.log(`[AgentPipe] Successfully resolved request: ${id}`);
 
       // Broadcast updated pending list to all connected dashboard clients
       broadcastPending();
@@ -282,7 +282,7 @@ const server = http.createServer(async (req, res) => {
         id: 'chatcmpl-' + Date.now(),
         object: 'chat.completion.chunk',
         created: Math.floor(Date.now() / 1000),
-        model: 'agent-relay',
+        model: 'agent-pipe',
         choices: [{
           index: 0,
           delta: { content: '\n[Task canceled by user via dashboard]' },
@@ -295,7 +295,7 @@ const server = http.createServer(async (req, res) => {
       storedReq.res.end();
 
       store.removeRequest(id);
-      console.log(`[AgentRelay] Successfully canceled request: ${id}`);
+      console.log(`[AgentPipe] Successfully canceled request: ${id}`);
 
       broadcastPending();
 
@@ -308,7 +308,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: '404 Not Found' }));
   } catch (err) {
-    console.error('[AgentRelay] Unhandled server error:', err);
+    console.error('[AgentPipe] Unhandled server error:', err);
     if (!res.headersSent) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Internal Server Error' }));
@@ -317,5 +317,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`AgentRelay server listening on http://localhost:${PORT}`);
+  console.log(`AgentPipe server listening on http://localhost:${PORT}`);
 });

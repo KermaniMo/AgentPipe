@@ -539,7 +539,7 @@ function renderPendingList() {
     pendingList.appendChild(emptyState);
     emptyState.style.display = 'flex';
 
-    serverStatus.textContent = 'AgentRelay Dashboard - Waiting for Requests...';
+    serverStatus.textContent = 'AgentPipe Dashboard - Waiting for Requests...';
     pulseIndicator.className = 'pulse-dot idle';
 
     selectedRequestId = null;
@@ -548,7 +548,7 @@ function renderPendingList() {
   }
 
   emptyState.style.display = 'none';
-  serverStatus.textContent = `AgentRelay Dashboard - ${pendingRequests.length} Active Request${pendingRequests.length > 1 ? 's' : ''}`;
+  serverStatus.textContent = `AgentPipe Dashboard - ${pendingRequests.length} Active Request${pendingRequests.length > 1 ? 's' : ''}`;
   pulseIndicator.className = 'pulse-dot';
 
   // If currently selected request is no longer present, select the first available
@@ -727,7 +727,7 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-const ORIGINAL_TITLE = 'AgentRelay - Human-in-the-Loop LLM Proxy';
+const ORIGINAL_TITLE = 'AgentPipe - Human-in-the-Loop LLM Proxy';
 let lastAutoCopiedRequestId = null;
 let audioCtx = null;
 
@@ -795,12 +795,12 @@ function playNotificationChime() {
     osc2.start(now + 0.08);
     osc2.stop(now + 0.4);
   } catch (err) {
-    console.debug('[AgentRelay] Audio chime blocked or unavailable:', err);
+    console.debug('[AgentPipe] Audio chime blocked or unavailable:', err);
   }
 }
 
 function setNewRequestTitle() {
-  document.title = '(🔴 New Request) AgentRelay';
+  document.title = '(🔴 New Request) AgentPipe';
 }
 
 function restoreTitle() {
@@ -847,7 +847,7 @@ async function handleAutoCopyOnFocus() {
       showToast(`⚡ Prompt Auto-copied (${isFirstTurn ? 'Full Context' : 'Compact Mode'})!`);
     }
   } catch (err) {
-    console.debug('[AgentRelay] Auto-copy on focus blocked or failed:', err);
+    console.debug('[AgentPipe] Auto-copy on focus blocked or failed:', err);
   }
 }
 
@@ -864,12 +864,12 @@ document.addEventListener('visibilitychange', () => {
 const eventSource = new EventSource('/api/events');
 
 eventSource.onopen = () => {
-  console.log('[AgentRelay] SSE connection established');
+  console.log('[AgentPipe] SSE connection established');
   if (pendingRequests.length === 0) {
-    serverStatus.textContent = 'AgentRelay Dashboard - Waiting for Requests...';
+    serverStatus.textContent = 'AgentPipe Dashboard - Waiting for Requests...';
     pulseIndicator.className = 'pulse-dot idle';
   } else {
-    serverStatus.textContent = `AgentRelay Dashboard - ${pendingRequests.length} Active Request${pendingRequests.length > 1 ? 's' : ''}`;
+    serverStatus.textContent = `AgentPipe Dashboard - ${pendingRequests.length} Active Request${pendingRequests.length > 1 ? 's' : ''}`;
     pulseIndicator.className = 'pulse-dot';
   }
 };
@@ -896,13 +896,13 @@ eventSource.onmessage = (event) => {
       }
     }
   } catch (err) {
-    console.error('[AgentRelay] Error parsing SSE event data:', err);
+    console.error('[AgentPipe] Error parsing SSE event data:', err);
   }
 };
 
 eventSource.onerror = (err) => {
-  console.warn('[AgentRelay] SSE connection error / reconnecting...', err);
-  serverStatus.textContent = 'AgentRelay Server Disconnected - Reconnecting...';
+  console.warn('[AgentPipe] SSE connection error / reconnecting...', err);
+  serverStatus.textContent = 'AgentPipe Server Disconnected - Reconnecting...';
   pulseIndicator.className = 'pulse-dot idle';
 };
 
@@ -1024,7 +1024,7 @@ responseInput.addEventListener('focus', async () => {
     }
   } catch (err) {
     // Graceful catch for permission rejections or non-gesture focus
-    console.debug('[AgentRelay] Auto-paste readText not permitted:', err);
+    console.debug('[AgentPipe] Auto-paste readText not permitted:', err);
   }
 });
 
@@ -1047,7 +1047,7 @@ chipSampleTool.addEventListener('click', () => {
   responseInput.value = JSON.stringify({
     name: 'execute_command',
     arguments: {
-      command: 'echo "Hello from AgentRelay"'
+      command: 'echo "Hello from AgentPipe"'
     }
   }, null, 2);
   updateValidationIndicator();

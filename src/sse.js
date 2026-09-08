@@ -74,7 +74,7 @@ export function sendSSEResponse(res, rawPayload) {
       id: chunkId,
       object: 'chat.completion.chunk',
       created,
-      model: 'agent-relay',
+      model: 'agent-pipe',
       choices: [
         {
           index: 0,
@@ -99,7 +99,7 @@ export function sendSSEResponse(res, rawPayload) {
       id: chunkId,
       object: 'chat.completion.chunk',
       created,
-      model: 'agent-relay',
+      model: 'agent-pipe',
       choices: [
         {
           index: 0,
