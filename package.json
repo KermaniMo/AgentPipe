@@ -1,0 +1,27 @@
+{
+  "name": "agentrelay",
+  "version": "1.0.0",
+  "description": "Human-in-the-Loop OpenAI-compatible SSE proxy bridging coding agents (like Cline) to web chatbots.",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "cline",
+    "llm-proxy",
+    "human-in-the-loop",
+    "openai-compatible",
+    "sse",
+    "chatgpt",
+    "claude",
+    "gemini",
+    "deepseek"
+  ],
+  "author": "Mohammad Kermani",
+  "license": "MIT"
+}
+

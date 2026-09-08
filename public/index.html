@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgentRelay - Human-in-the-Loop LLM Proxy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- Navigation Header -->
+  <header>
+    <div class="brand-section">
+      <div class="logo-badge">AR</div>
+      <div>
+        <div class="brand-title">AgentRelay</div>
+      </div>
+      <span class="brand-sub">port: 4747</span>
+    </div>
+    <div class="status-section">
+      <div class="status-badge">
+        <span class="pulse-dot idle" id="pulse-indicator"></span>
+        <span id="server-status">AgentRelay Dashboard - Waiting for Requests...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Grid -->
+  <main>
+    <!-- Container 1: Pending Requests -->
+    <section class="dashboard-panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>Incoming Requests</span>
+          <span class="counter-badge" id="pending-count">0</span>
+        </div>
+        <button class="btn btn-secondary" id="refresh-btn" title="Manual refresh">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+          Refresh
+        </button>
+      </div>
+
+      <div class="panel-body" id="pending-list">
+        <!-- Rendered dynamically by app.js -->
+        <div class="empty-state" id="empty-state">
+          <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+          <div class="empty-title">No active requests from Cline</div>
+          <div class="empty-sub">AgentRelay is listening on http://localhost:4747. Configure Cline with custom OpenAI base URL to intercept queries.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Container 2: Response Input Area -->
+    <section class="dashboard-panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>Human Intervention / Response</span>
+        </div>
+        <div class="format-chips">
+          <button class="chip" id="chip-sample-tool" title="Insert a sample tool call structure">Insert Tool Call</button>
+          <button class="chip" id="chip-sample-text" title="Insert a sample text structure">Insert Text</button>
+          <button class="chip" id="chip-clear" title="Clear input">Clear</button>
+        </div>
+      </div>
+
+      <div class="panel-body">
+        <div class="target-banner">
+          <div class="target-info">
+            <span class="target-label">Target Request:</span>
+            <span class="target-val" id="selected-req-display">None selected</span>
+            <span class="target-meta-badge" id="selected-req-meta"></span>
+          </div>
+          <button class="btn btn-cancel-active" id="cancel-active-btn" disabled title="Cancel this active request">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            Cancel Request
+          </button>
+        </div>
+
+        <!-- Smart Prompt Formatter Controls -->
+        <div class="prompt-toolbar" id="prompt-toolbar">
+          <div class="prompt-toolbar-info">
+            <span class="prompt-toolbar-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+              </svg>
+              Smart Prompt Formatter
+            </span>
+            <span class="prompt-mode-hint" id="prompt-mode-hint">Compact mode active</span>
+          </div>
+          <div class="segmented-control" role="group" aria-label="Prompt copy modes">
+            <button class="segmented-btn active" id="btn-copy-compact" type="button" disabled title="Copy only the last tool result or user message (Default)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span>Copy Last Message (Compact)</span>
+              <span class="default-pill">Default</span>
+            </button>
+            <button class="segmented-btn" id="btn-copy-full" type="button" disabled title="Copy full conversation history and tools schema">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+              </svg>
+              <span>Copy Full Context</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="editor-section">
+          <div class="editor-label-row">
+            <label for="response-input" class="editor-label">Paste Chatbot / LLM Output:</label>
+            <span style="font-size: 0.7rem; color: var(--text-dim);">Accepts plain text or JSON tool call</span>
+          </div>
+          <textarea
+            id="response-input"
+            placeholder="Paste your LLM's response here...&#10;&#10;Examples:&#10;1) Plain text explanation&#10;2) Tool Call JSON, e.g.:&#10;{&#10;  &quot;name&quot;: &quot;execute_command&quot;,&#10;  &quot;arguments&quot;: { &quot;command&quot;: &quot;npm test&quot; }&#10;}"
+            spellcheck="false"
+          ></textarea>
+          <div class="validation-bar">
+            <div class="validation-badge text-mode" id="validation-badge">
+              <span class="validation-dot"></span>
+              <span id="validation-text">Text Response Mode</span>
+            </div>
+            <span class="shortcut-hint">Press <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to Send</span>
+          </div>
+        </div>
+
+        <div class="dispatch-footer">
+          <div class="status-msg" id="dispatch-status"></div>
+          <button class="btn btn-primary" id="send-btn" disabled>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+            Send
+          </button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Global Toast Feedback -->
+  <div class="toast" id="toast">Copied to clipboard!</div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
