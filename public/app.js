@@ -957,7 +957,7 @@ async function handleSend() {
 
     const resolvedId = selectedRequestId;
     setStatus(`✓ Successfully resolved ${resolvedId}!`, 'success');
-    showToast(`Response dispatched to Cline (${resolvedId})`);
+    showToast(`Response dispatched to agent (${resolvedId})`);
 
     restoreTitle();
     lastAutoCopiedRequestId = null;
