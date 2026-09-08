@@ -27,10 +27,38 @@
     </div>
   </header>
 
+  <!-- Quick Connection Bar -->
+  <div class="quick-conn-bar">
+    <div class="quick-conn-container">
+      <!-- Base URL Badge -->
+      <div class="base-url-group">
+        <span class="conn-label">Base URL:</span>
+        <div class="base-url-badge" id="base-url-badge" title="Click to copy Base URL">
+          <span class="base-url-text" id="base-url-text">http://localhost:4747/v1</span>
+          <button class="btn btn-copy-base" id="copy-base-url-btn" type="button" title="Copy Base URL">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span>Copy Base URL</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Copy System Prompt Button -->
+      <div class="quick-conn-actions">
+        <button class="btn btn-copy-system-prompt" id="copy-system-prompt-btn" type="button" title="Copy strict system prompt for new web chat">
+          <span class="prompt-btn-title">📋 Copy System Prompt</span>
+          <span class="prompt-badge">For New Web Chat</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Main Content Grid -->
   <main>
     <!-- Container 1: Pending Requests -->
-    <section class="dashboard-panel">
+    <section class="dashboard-panel requests-panel">
       <div class="panel-header">
         <div class="panel-title">
           <span>Incoming Requests</span>
@@ -61,7 +89,7 @@
     </section>
 
     <!-- Container 2: Response Input Area -->
-    <section class="dashboard-panel">
+    <section class="dashboard-panel response-panel">
       <div class="panel-header">
         <div class="panel-title">
           <span>Human Intervention / Response</span>

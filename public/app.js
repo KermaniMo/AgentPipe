@@ -3,6 +3,27 @@ let pendingRequests = [];
 let selectedRequestId = null;
 let toastTimer = null;
 
+// System Prompt Constant for New Web Chat
+const SYSTEM_PROMPT = `You are acting strictly as the autonomous backend LLM engine for an AI coding agent.
+I will forward environment context, user instructions, file states, and tool execution outputs to you step-by-step.
+
+Your responsibility is to drive the task forward by selecting and executing the next appropriate action.
+
+### STRICT OPERATING RULES:
+1. NO conversational filler, greetings, or acknowledgments (never say "Sure", "Let me check", or "Here is the tool").
+2. When an action/tool is needed, output ONLY a valid JSON object specifying the tool call:
+   {
+     "name": "<tool_name>",
+     "arguments": { ... }
+   }
+3. Always use the exact tool names and argument schemas provided in the prompt context.
+4. Avoid markdown code block wrappers (like \`\`\`json ... \`\`\`) whenever possible; output raw JSON.
+5. When the entire task is finished, or when answering a purely informational question with no tool required, reply in clean, direct plain text (NO JSON).
+
+Acknowledge your role by replying with exactly one word: "READY".`;
+
+const BASE_URL = 'http://localhost:4747/v1';
+
 // DOM Elements
 const pendingList = document.getElementById('pending-list');
 const emptyState = document.getElementById('empty-state');
@@ -18,6 +39,11 @@ const dispatchStatus = document.getElementById('dispatch-status');
 const refreshBtn = document.getElementById('refresh-btn');
 const validationBadge = document.getElementById('validation-badge');
 const validationText = document.getElementById('validation-text');
+
+// Quick Connection Bar Controls
+const copyBaseUrlBtn = document.getElementById('copy-base-url-btn');
+const baseUrlBadge = document.getElementById('base-url-badge');
+const copySystemPromptBtn = document.getElementById('copy-system-prompt-btn');
 
 // Prompt Formatter Controls
 const btnCopyCompact = document.getElementById('btn-copy-compact');
@@ -1125,6 +1151,27 @@ if (cancelActiveBtn) {
     } else {
       showToast('No request selected to cancel', true);
     }
+  });
+}
+
+// Quick Connection Bar Listeners
+if (copyBaseUrlBtn) {
+  copyBaseUrlBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    copyToClipboard(BASE_URL, copyBaseUrlBtn, 'Copied Base URL (http://localhost:4747/v1)!');
+  });
+}
+
+if (baseUrlBadge) {
+  baseUrlBadge.addEventListener('click', (e) => {
+    if (e.target.closest('#copy-base-url-btn')) return;
+    copyToClipboard(BASE_URL, copyBaseUrlBtn, 'Copied Base URL (http://localhost:4747/v1)!');
+  });
+}
+
+if (copySystemPromptBtn) {
+  copySystemPromptBtn.addEventListener('click', () => {
+    copyToClipboard(SYSTEM_PROMPT, copySystemPromptBtn, 'Copied System Prompt to clipboard!');
   });
 }
 
