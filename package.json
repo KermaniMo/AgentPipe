@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Human-in-the-Loop OpenAI-compatible SSE proxy bridging coding agents (like Cline) to web chatbots.",
   "main": "src/server.js",
+  "bin": {
+    "agentpipe": "src/cli.js"
+  },
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
