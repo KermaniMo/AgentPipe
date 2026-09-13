@@ -968,6 +968,34 @@ textarea#response-input::placeholder {
   box-shadow: 0 0 8px #10b981;
 }
 
+/* Auto-Repaired Mode (Yellow / Amber) */
+.validation-badge.repaired-mode {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+}
+.validation-badge.repaired-mode .validation-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+}
+
+.sanitized-pill {
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(245, 158, 11, 0.22);
+  color: #fde68a;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  line-height: 1.2;
+  margin-left: 0.4rem;
+  display: inline-block;
+  vertical-align: middle;
+}
+
 /* Text Mode (Blue) */
 .validation-badge.text-mode {
   background: rgba(59, 130, 246, 0.12);
