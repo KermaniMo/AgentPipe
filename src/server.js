@@ -78,47 +78,40 @@ const server = http.createServer(async (req, res) => {
   const pathname = url.pathname;
 
   try {
-    // Serve dashboard index.html
-    if (req.method === 'GET' && pathname === '/') {
-      const filePath = path.join(PUBLIC_DIR, 'index.html');
-      fs.readFile(filePath, (err, content) => {
-        if (err) {
-          res.writeHead(500, { 'Content-Type': 'text/plain' });
-          res.end('500 Internal Server Error');
-          return;
-        }
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(content);
-      });
-      return;
-    }
+    // Serve static files from public directory
+    if (req.method === 'GET' && !pathname.startsWith('/api/') && !pathname.startsWith('/v1/')) {
+      const reqPath = pathname === '/' ? '/index.html' : pathname;
+      
+      // Prevent directory traversal attacks
+      const safeSuffix = path.normalize(reqPath).replace(/^(\.\.(\/|\\|$))+/, '');
+      const filePath = path.join(PUBLIC_DIR, safeSuffix);
 
-    // Serve dashboard app.js
-    if (req.method === 'GET' && pathname === '/app.js') {
-      const filePath = path.join(PUBLIC_DIR, 'app.js');
-      fs.readFile(filePath, (err, content) => {
-        if (err) {
-          res.writeHead(500, { 'Content-Type': 'text/plain' });
-          res.end('500 Internal Server Error');
+      fs.stat(filePath, (err, stats) => {
+        if (err || !stats.isFile()) {
+          res.writeHead(404, { 'Content-Type': 'text/plain' });
+          res.end('404 Not Found');
           return;
         }
-        res.writeHead(200, { 'Content-Type': 'application/javascript' });
-        res.end(content);
-      });
-      return;
-    }
 
-    // Serve dashboard style.css
-    if (req.method === 'GET' && pathname === '/style.css') {
-      const filePath = path.join(PUBLIC_DIR, 'style.css');
-      fs.readFile(filePath, (err, content) => {
-        if (err) {
-          res.writeHead(500, { 'Content-Type': 'text/plain' });
-          res.end('500 Internal Server Error');
-          return;
-        }
-        res.writeHead(200, { 'Content-Type': 'text/css' });
-        res.end(content);
+        const ext = path.extname(filePath).toLowerCase();
+        let contentType = 'text/plain';
+        if (ext === '.html') contentType = 'text/html';
+        else if (ext === '.js') contentType = 'application/javascript';
+        else if (ext === '.css') contentType = 'text/css';
+        else if (ext === '.json') contentType = 'application/json';
+        else if (ext === '.png') contentType = 'image/png';
+        else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+        else if (ext === '.svg') contentType = 'image/svg+xml';
+
+        fs.readFile(filePath, (err, content) => {
+          if (err) {
+            res.writeHead(500, { 'Content-Type': 'text/plain' });
+            res.end('500 Internal Server Error');
+            return;
+          }
+          res.writeHead(200, { 'Content-Type': contentType });
+          res.end(content);
+        });
       });
       return;
     }
