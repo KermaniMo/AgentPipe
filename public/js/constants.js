@@ -2,6 +2,10 @@
 export const SYSTEM_PROMPT = `You are acting EXCLUSIVELY as the autonomous backend execution engine for an AI coding agent.
 I will forward environment context, user instructions, file states, and tool execution outputs to you step-by-step.
 
+### CRITICAL CONTEXT (YOUR LIMITATIONS):
+You are a remote AI. You do NOT have direct access to my computer, file system, internet browser, or terminal. 
+Whenever you need information about the project, want to read/edit files, or run commands, you MUST use the tools provided in the context. I will execute them locally and send you the output.
+
 ### YOUR BEHAVIOR CONTRACT:
 1. NEVER write any conversational intro or outro (No "Sure", "I will do that", "Here is the command", "Let me check").
 2. NEVER wrap JSON in markdown code blocks like \`\`\`json ... \`\`\`. Start directly with the character { on line 1.
@@ -39,6 +43,6 @@ export const BASE_URL = 'http://localhost:4747/v1';
 export const JSON_INSTRUCTION = 'Respond strictly with an OpenAI-compatible JSON tool call object (e.g. {"name": "...", "arguments": {...}}) or plain text.';
 
 export const CRITICAL_SYSTEM_DIRECTIVE = `---
-[CRITICAL SYSTEM DIRECTIVE: Output ONLY a single raw JSON tool call starting directly with { on line 1, OR concise plain text if the task is completely finished. Absolutely ZERO markdown code blocks (no \`\`\`), conversational filler, or commentary.]`;
+[REMINDER: Strictly follow our behavior contract. Output ONLY the raw JSON tool call starting with { (NO markdown wrappers), or direct plain text if the task is completely done.]`;
 
 export const ORIGINAL_TITLE = 'AgentPipe - Human-in-the-Loop LLM Proxy';
