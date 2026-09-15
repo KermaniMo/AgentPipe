@@ -1,4 +1,5 @@
 import { ORIGINAL_TITLE } from './constants.js';
+import { settings } from './settings.js';
 
 let audioCtx = null;
 
@@ -26,7 +27,8 @@ export function unlockAudio() {
 /**
  * Play a short, subtle, pleasant chime using Web Audio API oscillator
  */
-export function playNotificationChime() {
+export function playNotificationChime(force = false) {
+  if (!force && settings && !settings.soundAlerts) return;
   try {
     const ctx = getAudioContext();
     if (!ctx) return;

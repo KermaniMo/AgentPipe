@@ -21,6 +21,7 @@ import { initSSE } from './sse.js';
 import { restoreTitle, unlockAudio } from './audio.js';
 import { copyToClipboard, handleAutoCopyOnFocus, resetAutoCopyState } from './clipboard.js';
 import { formatCompactPrompt, formatFullPrompt } from './formatters.js';
+import { settings, initSettingsUI } from './settings.js';
 
 // Setup audio unlock on gesture
 window.addEventListener('click', unlockAudio, { once: true });
@@ -173,6 +174,7 @@ responseInput.addEventListener('keydown', (e) => {
 responseInput.addEventListener('input', updateValidationIndicator);
 
 responseInput.addEventListener('focus', async () => {
+  if (settings && !settings.autoPaste) return;
   if (responseInput.value.trim().length > 0) return;
 
   try {
@@ -301,9 +303,13 @@ if (baseUrlBadge) {
 
 if (copySystemPromptBtn) {
   copySystemPromptBtn.addEventListener('click', () => {
-    copyToClipboard(SYSTEM_PROMPT, copySystemPromptBtn, 'Copied System Prompt to clipboard!');
+    const promptToCopy = (settings && settings.systemPrompt) || SYSTEM_PROMPT;
+    copyToClipboard(promptToCopy, copySystemPromptBtn, 'Copied System Prompt to clipboard!');
   });
 }
+
+// Initialize settings modal and configuration
+initSettingsUI();
 
 // Initial state
 updateValidationIndicator();

@@ -16,6 +16,7 @@ import {
 import { getLatestUserMessage, getToolOutput, formatCompactPrompt, formatFullPrompt } from './formatters.js';
 import { copyToClipboard } from './clipboard.js';
 import { cancelRequest } from './app.js';
+import { settings } from './settings.js';
 
 export const state = {
   pendingRequests: [],
@@ -42,6 +43,9 @@ export function updateSelectionUI() {
       if (msgCount <= 2) {
         promptModeHint.textContent = 'First turn: Full Context recommended';
         promptModeHint.className = 'prompt-mode-hint first-turn';
+      } else if (settings && settings.defaultCopyMode === 'full') {
+        promptModeHint.textContent = 'Full Context mode active';
+        promptModeHint.className = 'prompt-mode-hint';
       } else {
         promptModeHint.textContent = 'Compact mode active';
         promptModeHint.className = 'prompt-mode-hint';

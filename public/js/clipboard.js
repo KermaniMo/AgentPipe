@@ -1,6 +1,7 @@
 import { showToast, btnCopyCompact, btnCopyFull } from './dom.js';
 import { formatCompactPrompt, formatFullPrompt } from './formatters.js';
 import { state } from './ui.js';
+import { settings } from './settings.js';
 
 let lastAutoCopiedRequestId = null;
 
@@ -41,13 +42,14 @@ export async function copyToClipboard(text, btnElement, toastMsg = 'Copied to cl
 
 /**
  * Automatically format and copy prompt when tab gains focus with a pending request
- * - Uses Compact Mode by default
- * - Automatically uses Full Mode if it's the first turn in the session (messages.length <= 2)
+ * - Respects settings.autoCopy
+ * - Uses settings.defaultCopyMode
  */
 export async function handleAutoCopyOnFocus() {
   const { restoreTitle } = await import('./audio.js');
   restoreTitle();
 
+  if (settings && !settings.autoCopy) return;
   if (state.pendingRequests.length === 0) return;
 
   const targetReq = state.pendingRequests.find(r => r.id === state.selectedRequestId) || state.pendingRequests[0];
@@ -59,7 +61,7 @@ export async function handleAutoCopyOnFocus() {
   try {
     const messages = Array.isArray(targetReq.messages) ? targetReq.messages : [];
     const isFirstTurn = messages.length <= 2;
-    const mode = isFirstTurn ? 'full' : 'compact';
+    const mode = (settings && settings.defaultCopyMode === 'full') ? 'full' : (isFirstTurn ? 'full' : 'compact');
     const formatted = mode === 'full' ? formatFullPrompt(targetReq) : formatCompactPrompt(targetReq);
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -77,7 +79,7 @@ export async function handleAutoCopyOnFocus() {
         }
       }
 
-      showToast(`⚡ Prompt Auto-copied (${isFirstTurn ? 'Full Context' : 'Compact Mode'})!`);
+      showToast(`⚡ Prompt Auto-copied (${mode === 'full' ? 'Full Context' : 'Compact Mode'})!`);
     }
   } catch (err) {
     console.debug('[AgentPipe] Auto-copy on focus blocked or failed:', err);

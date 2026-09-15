@@ -31,6 +31,20 @@ export const chipSampleTool = get('chip-sample-tool');
 export const chipSampleText = get('chip-sample-text');
 export const chipClear = get('chip-clear');
 
+// Settings Modal Controls
+export const openSettingsBtn = get('open-settings-btn');
+export const settingsModal = get('settingsModal');
+export const closeSettingsBtn = get('close-settings-btn');
+export const btnCancelSettings = get('btn-cancel-settings');
+export const btnSaveSettings = get('btn-save-settings');
+export const settingAutoCopy = get('setting-auto-copy');
+export const settingAutoPaste = get('setting-auto-paste');
+export const settingSoundAlerts = get('setting-sound-alerts');
+export const btnTestChime = get('btn-test-chime');
+export const settingDefaultCopyMode = get('setting-default-copy-mode');
+export const settingSystemPrompt = get('setting-system-prompt');
+export const btnResetSystemPrompt = get('btn-reset-system-prompt');
+
 let toastTimer = null;
 
 export function showToast(message, isError = false) {

@@ -38,6 +38,8 @@ The document file size is 25,400 bytes. Inspection is complete.
 
 Acknowledge this contract by replying with ONLY the word: READY`;
 
+export const SYSTEM_PROMPT_DEFAULT = SYSTEM_PROMPT;
+
 export const BASE_URL = 'http://localhost:4747/v1';
 
 export const JSON_INSTRUCTION = 'Respond strictly with an OpenAI-compatible JSON tool call object (e.g. {"name": "...", "arguments": {...}}) or plain text.';
