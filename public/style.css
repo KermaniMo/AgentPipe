@@ -22,6 +22,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  overflow-anchor: none;
 }
 
 body {
@@ -33,6 +34,7 @@ body {
   flex-direction: column;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  overflow-anchor: none;
 }
 
 /* Top Navigation Bar */
