@@ -8,6 +8,7 @@ import {
   getLatestUserMessage,
   getToolOutput
 } from '../public/js/formatters.js';
+import { CRITICAL_SYSTEM_DIRECTIVE } from '../public/js/constants.js';
 
 test('Sanitizer: plain text response', () => {
   const result = sanitizeResponseInput('Just a normal answer to a question.');
@@ -80,7 +81,7 @@ test('Formatters: formatCompactPrompt with tool output', () => {
   const formatted = formatCompactPrompt(req);
   assert.ok(formatted.includes('Tool execution output for call_123:'));
   assert.ok(formatted.includes('Passed 5 tests'));
-  assert.ok(formatted.includes('CRITICAL SYSTEM DIRECTIVE'));
+  assert.ok(formatted.includes(CRITICAL_SYSTEM_DIRECTIVE));
 });
 
 test('Formatters: formatFullPrompt with tools and history', () => {

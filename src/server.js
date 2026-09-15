@@ -63,91 +63,34 @@ function readJsonBody(req) {
 }
 
 const server = http.createServer(async (req, res) => {
-  // Enable CORS for external tools, extensions, and the web dashboard
+  // Real-time incoming request logging
+  console.log(`[INCOMING] ${req.method} ${req.url}`);
+
+  // Enable universal CORS for external tools, extensions, and the web dashboard
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+  res.setHeader('Access-Control-Allow-Headers', '*');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
-    res.end();
-    return;
+    return res.end();
   }
 
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const pathname = url.pathname;
+  let pathname = url.pathname;
+  if (pathname.length > 1 && pathname.endsWith('/')) {
+    pathname = pathname.replace(/\/+$/, '');
+  }
 
   try {
-    // Serve static files from public directory
-    if (req.method === 'GET' && !pathname.startsWith('/api/') && !pathname.startsWith('/v1/')) {
-      const reqPath = pathname === '/' ? '/index.html' : pathname;
-      
-      // Prevent directory traversal attacks
-      const safeSuffix = path.normalize(reqPath).replace(/^(\.\.(\/|\\|$))+/, '');
-      const filePath = path.join(PUBLIC_DIR, safeSuffix);
-
-      fs.stat(filePath, (err, stats) => {
-        if (err || !stats.isFile()) {
-          res.writeHead(404, { 'Content-Type': 'text/plain' });
-          res.end('404 Not Found');
-          return;
-        }
-
-        const ext = path.extname(filePath).toLowerCase();
-        let contentType = 'text/plain';
-        if (ext === '.html') contentType = 'text/html';
-        else if (ext === '.js') contentType = 'application/javascript';
-        else if (ext === '.css') contentType = 'text/css';
-        else if (ext === '.json') contentType = 'application/json';
-        else if (ext === '.png') contentType = 'image/png';
-        else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
-        else if (ext === '.svg') contentType = 'image/svg+xml';
-
-        fs.readFile(filePath, (err, content) => {
-          if (err) {
-            res.writeHead(500, { 'Content-Type': 'text/plain' });
-            res.end('500 Internal Server Error');
-            return;
-          }
-          res.writeHead(200, { 'Content-Type': contentType });
-          res.end(content);
-        });
-      });
-      return;
-    }
-
-    // Real-time Server-Sent Events stream for dashboard
-    if (req.method === 'GET' && pathname === '/api/events') {
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*'
-      });
-
-      dashboardClients.add(res);
-      console.log(`[AgentPipe] Dashboard SSE client connected. Total clients: ${dashboardClients.size}`);
-
-      req.on('close', () => {
-        dashboardClients.delete(res);
-        console.log(`[AgentPipe] Dashboard SSE client disconnected. Total clients: ${dashboardClients.size}`);
-      });
-
-      // Immediately send current pending list on connection
-      res.write(`data: ${JSON.stringify(store.getAllPending())}\n\n`);
-      return;
-    }
-
-    // OpenAI-compatible models endpoint
-    if (req.method === 'GET' && pathname === '/v1/models') {
+    // OpenAI-compatible models discovery endpoint (/v1/models and /models)
+    if (req.method === 'GET' && (pathname === '/v1/models' || pathname === '/models')) {
       const modelsResponse = {
         object: 'list',
         data: [
           {
-            id: 'agent-pipe',
-            object: 'model',
-            created: 123456789,
-            owned_by: 'custom'
+            id: 'agent-relay',
+            object: 'model'
           }
         ]
       };
@@ -156,8 +99,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Intercept LLM chat completions and hold connection
-    if (req.method === 'POST' && pathname === '/v1/chat/completions') {
+    // Intercept LLM chat completions and hold connection (/v1/chat/completions and /chat/completions)
+    if (req.method === 'POST' && (pathname === '/v1/chat/completions' || pathname === '/chat/completions')) {
       let data;
       try {
         data = await readJsonBody(req);
@@ -185,6 +128,66 @@ const server = http.createServer(async (req, res) => {
       });
 
       // CRITICAL: Do NOT call res.end() or send headers! Leave the connection hanging.
+      return;
+    }
+
+    // Real-time Server-Sent Events stream for dashboard
+    if (req.method === 'GET' && pathname === '/api/events') {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*'
+      });
+
+      dashboardClients.add(res);
+      console.log(`[AgentPipe] Dashboard SSE client connected. Total clients: ${dashboardClients.size}`);
+
+      req.on('close', () => {
+        dashboardClients.delete(res);
+        console.log(`[AgentPipe] Dashboard SSE client disconnected. Total clients: ${dashboardClients.size}`);
+      });
+
+      // Immediately send current pending list on connection
+      res.write(`data: ${JSON.stringify(store.getAllPending())}\n\n`);
+      return;
+    }
+
+    // Serve static files from public directory
+    if (req.method === 'GET' && !pathname.startsWith('/api/') && !pathname.startsWith('/v1/')) {
+      const reqPath = pathname === '/' ? '/index.html' : pathname;
+      
+      // Prevent directory traversal attacks
+      const safeSuffix = path.normalize(reqPath).replace(/^(\.\.(\/|\\|$))+/, '');
+      const filePath = path.join(PUBLIC_DIR, safeSuffix);
+
+      fs.stat(filePath, (err, stats) => {
+        if (err || !stats.isFile()) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '404 Not Found' }));
+          return;
+        }
+
+        const ext = path.extname(filePath).toLowerCase();
+        let contentType = 'text/plain';
+        if (ext === '.html') contentType = 'text/html';
+        else if (ext === '.js') contentType = 'application/javascript';
+        else if (ext === '.css') contentType = 'text/css';
+        else if (ext === '.json') contentType = 'application/json';
+        else if (ext === '.png') contentType = 'image/png';
+        else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+        else if (ext === '.svg') contentType = 'image/svg+xml';
+
+        fs.readFile(filePath, (err, content) => {
+          if (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: '500 Internal Server Error' }));
+            return;
+          }
+          res.writeHead(200, { 'Content-Type': contentType });
+          res.end(content);
+        });
+      });
       return;
     }
 
@@ -312,3 +315,6 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`AgentPipe server listening on http://localhost:${PORT}`);
 });
+
+export { server, PORT };
+export default server;
