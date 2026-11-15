@@ -1,4 +1,4 @@
-import { test, after } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert';
 import http from 'node:http';
 import { server, PORT } from '../src/server.js';
@@ -29,8 +29,17 @@ function makeRequest(method, path, body = null, headers = {}) {
   });
 }
 
-after(() => {
-  server.close();
+before((_, done) => {
+  if (server.listening) return done();
+  server.listen(PORT, done);
+});
+
+after((_, done) => {
+  if (server.listening) {
+    server.close(done);
+  } else {
+    done();
+  }
 });
 
 test('CORS: Universal headers applied to GET request', async () => {
