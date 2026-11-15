@@ -116,11 +116,26 @@ export function resolveSafePath(publicDir, requestUrl) {
 
   // Containment verification against public directory
   const resolvedRoot = path.resolve(publicDir);
-  const candidatePath = path.resolve(resolvedRoot, sanitizedRelative);
+  let candidatePath = path.resolve(resolvedRoot, sanitizedRelative);
 
   const relative = path.relative(resolvedRoot, candidatePath);
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
     return null;
+  }
+
+  // Handle directory requests where trailing slash was normalized:
+  // if candidate path is a directory, resolve path.join(candidatePath, 'index.html')
+  try {
+    const stats = fs.statSync(candidatePath);
+    if (stats.isDirectory()) {
+      const indexCandidate = path.join(candidatePath, 'index.html');
+      const indexRelative = path.relative(resolvedRoot, indexCandidate);
+      if (!indexRelative.startsWith('..') && !path.isAbsolute(indexRelative)) {
+        return indexCandidate;
+      }
+    }
+  } catch {
+    // candidatePath does not exist; return candidatePath so stat/ENOENT can handle it later
   }
 
   return candidatePath;
@@ -174,6 +189,17 @@ export async function serveStatic(req, res, options = {}) {
     // File not found (ENOENT) or inaccessible
     sendNotFound(res);
     return false;
+  }
+
+  // Handle directory requests where trailing slash was normalized: if candidate path is a directory, resolve path.join(candidatePath, 'index.html')
+  if (stats.isDirectory()) {
+    filePath = path.join(filePath, 'index.html');
+    try {
+      stats = await fs.promises.stat(filePath);
+    } catch {
+      sendNotFound(res);
+      return false;
+    }
   }
 
   // Must be a regular file

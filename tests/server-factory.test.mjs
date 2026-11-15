@@ -8,7 +8,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 // Subject under test
-import { createAgentPipeServer, server as exportedServer, PORT as EXPORTED_PORT } from '../src/server.js';
+import { createAgentPipeServer, server as exportedServer, getServer, PORT as EXPORTED_PORT } from '../src/server.js';
 import { RequestStore } from '../src/store.js';
 import { resolvePort, start as cliStart, DEFAULT_PORT } from '../src/cli.js';
 
@@ -70,6 +70,13 @@ describe('Server Factory Assembly and CLI Lifecycle', () => {
       // The exportedServer must not be actively listening upon import
       assert.strictEqual(exportedServer.listening, false, 'Server should not be listening on module import');
       assert.strictEqual(exportedServer.address(), null, 'Server address should be null when not listening');
+    });
+
+    test('getServer returns lazily instantiated server instance without side effects', () => {
+      const serverInstance = getServer();
+      assert.ok(serverInstance instanceof http.Server);
+      assert.strictEqual(serverInstance.listening, false);
+      assert.strictEqual(serverInstance.address(), null);
     });
 
     test('Default port is not bound by importing server.js', async () => {

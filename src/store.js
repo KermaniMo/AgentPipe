@@ -50,7 +50,6 @@ export class RequestStore extends EventEmitter {
         if (data && typeof data === 'object') {
           request.payload = data.payload;
         }
-        request.request = request;
         this.emit('request:resolved', request, data);
       };
 
@@ -58,12 +57,11 @@ export class RequestStore extends EventEmitter {
         if (data && typeof data === 'object') {
           request.reason = data.reason;
         }
-        request.request = request;
         this.emit('request:canceled', request, data);
       };
 
       const onAborted = (data) => {
-        request.request = request;
+        this.removeRequest(request.id);
         this.emit('request:aborted', request, data);
       };
 
@@ -86,7 +84,6 @@ export class RequestStore extends EventEmitter {
       });
     }
 
-    request.request = request;
     this.emit('request:added', request);
     return request;
   }
