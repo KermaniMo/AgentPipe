@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import store from './store.js';
 import { sendSSEResponse } from './sse.js';
+import { serveStatic } from './static.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -155,45 +156,7 @@ const server = http.createServer(async (req, res) => {
 
     // Serve static files from public directory
     if (req.method === 'GET' && !pathname.startsWith('/api/') && !pathname.startsWith('/v1/')) {
-      const reqPath = pathname === '/' ? '/index.html' : pathname;
-      
-      // Prevent directory traversal attacks
-      const safeSuffix = path.normalize(reqPath).replace(/^(\.\.(\/|\\|$))+/, '');
-      const filePath = path.join(PUBLIC_DIR, safeSuffix);
-
-      fs.stat(filePath, (err, stats) => {
-        if (err || !stats.isFile()) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: '404 Not Found' }));
-          return;
-        }
-
-        const ext = path.extname(filePath).toLowerCase();
-        let contentType = 'text/plain';
-        if (ext === '.html') contentType = 'text/html';
-        else if (ext === '.js') contentType = 'application/javascript';
-        else if (ext === '.css') contentType = 'text/css';
-        else if (ext === '.json') contentType = 'application/json';
-        else if (ext === '.png') contentType = 'image/png';
-        else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
-        else if (ext === '.svg') contentType = 'image/svg+xml';
-
-        fs.readFile(filePath, (err, content) => {
-          if (err) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: '500 Internal Server Error' }));
-            return;
-          }
-          res.writeHead(200, {
-            'Content-Type': contentType,
-            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          });
-          res.end(content);
-        });
-      });
-      return;
+      return serveStatic(req, res, { publicDir: PUBLIC_DIR });
     }
 
     // Get all pending requests for dashboard (fallback / API access)
