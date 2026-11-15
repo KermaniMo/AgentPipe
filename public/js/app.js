@@ -173,7 +173,7 @@ responseInput.addEventListener('keydown', (e) => {
 
 responseInput.addEventListener('input', updateValidationIndicator);
 
-responseInput.addEventListener('focus', async () => {
+responseInput.addEventListener('click', async () => {
   if (settings && !settings.autoPaste) return;
   if (responseInput.value.trim().length > 0) return;
 

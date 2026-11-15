@@ -27,13 +27,6 @@ export function sanitizeResponseInput(rawText) {
     .replace(/<thought[\s\S]*?<\/thought>/gi, '')
     .trim();
 
-  // 2. Extract markdown code blocks if present
-  let codeBlockContent = null;
-  const codeBlockMatch = cleaned.match(/```(?:json|javascript|js|xml)?\s*([\s\S]*?)\s*```/i);
-  if (codeBlockMatch) {
-    codeBlockContent = codeBlockMatch[1].trim();
-  }
-
   // Helper to find balanced JSON object {...} or array [...]
   function findBalancedJson(str) {
     let startIndex = -1;
@@ -79,37 +72,66 @@ export function sanitizeResponseInput(rawText) {
     return null; // Unbalanced
   }
 
-  // Determine candidate JSON string using accurate outer JSON extractor first to discard trailing text
+  // 2. Scan markdown code blocks for candidate JSON / tool calls
+  const jsonCompatibleLangs = new Set(['json', 'jsonc', 'json5', 'javascript', 'js']);
+  const codeBlockRegex = /```([a-zA-Z0-9_-]*)[ \t]*\r?\n?([\s\S]*?)```/g;
+  let codeBlockMatch;
   let candidateJson = null;
-  if (codeBlockContent) {
-    candidateJson = extractOuterJSON(codeBlockContent) || findBalancedJson(codeBlockContent) || codeBlockContent;
-  } else {
-    candidateJson = extractOuterJSON(cleaned) || findBalancedJson(cleaned);
+  let codeBlockContent = null;
+  let hasExplicitJsonCodeBlock = false;
+
+  while ((codeBlockMatch = codeBlockRegex.exec(cleaned)) !== null) {
+    const lang = codeBlockMatch[1].toLowerCase().trim();
+    const content = codeBlockMatch[2].trim();
+
+    if (jsonCompatibleLangs.has(lang)) {
+      hasExplicitJsonCodeBlock = true;
+      codeBlockContent = content;
+      candidateJson = extractOuterJSON(content) || findBalancedJson(content) || content;
+      break;
+    } else if (lang === '') {
+      // Bare code block: only candidate if it contains a JSON object or array structure
+      const extracted = extractOuterJSON(content) || findBalancedJson(content);
+      if (extracted) {
+        codeBlockContent = content;
+        candidateJson = extracted;
+        break;
+      }
+    }
   }
 
-  // Fallback: extract substring between first { or [ and last } or ] if balanced scan didn't find one
+  // 3. If no candidate from code blocks, try extracting from cleaned text (ignoring non-JSON code blocks)
   if (!candidateJson) {
-    const firstBrace = cleaned.search(/[{\[]/);
-    const lastBrace = Math.max(cleaned.lastIndexOf('}'), cleaned.lastIndexOf(']'));
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      candidateJson = cleaned.slice(firstBrace, lastBrace + 1);
+    const textWithoutNonJsonBlocks = cleaned.replace(/```([a-zA-Z0-9_-]+)[ \t]*\r?\n?([\s\S]*?)```/g, (m, lang) => {
+      return jsonCompatibleLangs.has(lang.toLowerCase().trim()) ? m : '';
+    }).trim();
+
+    if (textWithoutNonJsonBlocks.startsWith('{') || textWithoutNonJsonBlocks.startsWith('[')) {
+      candidateJson = extractOuterJSON(textWithoutNonJsonBlocks) || findBalancedJson(textWithoutNonJsonBlocks) || textWithoutNonJsonBlocks;
+    } else {
+      const balanced = findBalancedJson(textWithoutNonJsonBlocks);
+      if (balanced) {
+        candidateJson = balanced;
+      } else {
+        const firstBrace = textWithoutNonJsonBlocks.search(/[{\[]/);
+        const lastBrace = Math.max(textWithoutNonJsonBlocks.lastIndexOf('}'), textWithoutNonJsonBlocks.lastIndexOf(']'));
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+          candidateJson = textWithoutNonJsonBlocks.slice(firstBrace, lastBrace + 1);
+        }
+      }
     }
   }
 
   // Primary and secondary auto-repair parsing using tryRepairAndParseJSON
   let parseResult = candidateJson ? tryRepairAndParseJSON(candidateJson) : null;
 
-  // If candidate failed, also try running tryRepairAndParseJSON on codeBlockContent or cleaned
+  // If candidate failed, also try running tryRepairAndParseJSON on codeBlockContent if it contained JSON markers
   if ((!parseResult || !parseResult.success) && codeBlockContent && candidateJson !== codeBlockContent) {
-    const cbResult = tryRepairAndParseJSON(codeBlockContent);
-    if (cbResult.success) {
-      parseResult = cbResult;
-    }
-  }
-  if ((!parseResult || !parseResult.success) && candidateJson !== cleaned) {
-    const clResult = tryRepairAndParseJSON(cleaned);
-    if (clResult.success) {
-      parseResult = clResult;
+    if (codeBlockContent.includes('{') || codeBlockContent.includes('[')) {
+      const cbResult = tryRepairAndParseJSON(codeBlockContent);
+      if (cbResult.success) {
+        parseResult = cbResult;
+      }
     }
   }
 
@@ -117,20 +139,25 @@ export function sanitizeResponseInput(rawText) {
   const isRepaired = Boolean(parseResult?.repaired);
   const repairReason = parseResult?.repairReason || '';
 
-  // Detect whether the input strongly appears to be intended as JSON
+  // Check if text (excluding non-JSON code blocks) strongly appears to be intended as a JSON tool call
+  const textForIntentCheck = cleaned.replace(/```([a-zA-Z0-9_-]+)[ \t]*\r?\n?([\s\S]*?)```/g, (m, lang) => {
+    return jsonCompatibleLangs.has(lang.toLowerCase().trim()) ? m : '';
+  }).trim();
+
+  const hasToolKeywords = textForIntentCheck.includes('{') && (
+    textForIntentCheck.includes('"name"') ||
+    textForIntentCheck.includes('"arguments"') ||
+    textForIntentCheck.includes('"tool_calls"') ||
+    textForIntentCheck.includes('"function"') ||
+    textForIntentCheck.includes('"command"') ||
+    textForIntentCheck.includes('"commands"')
+  );
+
   const looksLikeJson =
-    codeBlockMatch !== null ||
-    cleaned.startsWith('{') ||
-    cleaned.startsWith('[') ||
-    cleaned.includes('```json') ||
-    (cleaned.includes('{') && (
-      cleaned.includes('"name"') ||
-      cleaned.includes('"arguments"') ||
-      cleaned.includes('"tool_calls"') ||
-      cleaned.includes('"function"') ||
-      cleaned.includes('"command"') ||
-      cleaned.includes('"commands"')
-    ));
+    hasExplicitJsonCodeBlock ||
+    (textForIntentCheck.startsWith('{') && (hasToolKeywords || textForIntentCheck.includes(':'))) ||
+    (textForIntentCheck.startsWith('[') && textForIntentCheck.includes('{')) ||
+    hasToolKeywords;
 
   if (!parsedJson && looksLikeJson) {
     const errMsg = parseResult?.error || 'Syntax error in JSON';
