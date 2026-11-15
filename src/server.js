@@ -2,287 +2,113 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import store from './store.js';
-import { sendSSEResponse } from './sse.js';
-import { serveStatic } from './static.js';
+
+import { createRouter } from './router.js';
+import { serveStatic, DEFAULT_PUBLIC_DIR } from './static.js';
+import { createAgentController } from './controllers/agent.controller.js';
+import { createDashboardController } from './controllers/dashboard.controller.js';
+import defaultStore from './store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
-const PORT = 4747;
-
-// Connected SSE dashboard clients
-const dashboardClients = new Set();
+export const PORT = 4747;
 
 /**
- * Broadcast updated pending requests list to all connected dashboard SSE clients
+ * Creates and returns an unlistened AgentPipe HTTP server instance.
+ * Wires the router, agent interception controller, dashboard controller,
+ * static asset streaming with traversal guards, and universal CORS.
+ *
+ * @param {object} [options]
+ * @param {import('./store.js').RequestStore} [options.store] Store for intercepted requests
+ * @param {string} [options.publicDir] Directory containing static dashboard assets
+ * @param {number} [options.port] Default port (default 4747)
+ * @param {string} [options.host] Default host (default 'localhost')
+ * @param {number} [options.bodyLimit] JSON body parsing limit in bytes
+ * @returns {import('node:http').Server} Unlistened HTTP server instance
  */
-function broadcastPending() {
-  const data = JSON.stringify(store.getAllPending());
-  const message = `data: ${data}\n\n`;
+export function createAgentPipeServer(options = {}) {
+  const store = options.store || defaultStore;
+  const publicDir = options.publicDir || DEFAULT_PUBLIC_DIR;
+  const port = options.port || PORT;
+  const host = options.host || 'localhost';
+  const bodyLimit = options.bodyLimit;
 
-  for (const clientRes of dashboardClients) {
-    try {
-      if (!clientRes.writableEnded) {
-        clientRes.write(message);
-      } else {
-        dashboardClients.delete(clientRes);
+  const router = createRouter({ bodyLimit });
+
+  // 1. Wire Agent Controller routes (/v1/models, /models, /v1/chat/completions, /chat/completions)
+  const agentController = createAgentController(store);
+  agentController.registerRoutes(router);
+
+  // 2. Wire Dashboard Controller routes (/api/events, /api/pending, /api/resolve, /api/cancel)
+  const dashboardController = createDashboardController(store);
+  dashboardController.registerRoutes(router);
+
+  // 3. Wire Static Assets with Path Traversal Guards and 404 Fallback
+  router.setNotFoundHandler(async (req, res) => {
+    const method = (req.method || 'GET').toUpperCase();
+    if (method === 'GET' || method === 'HEAD') {
+      if (!req.pathname.startsWith('/api/') && !req.pathname.startsWith('/v1/')) {
+        return serveStatic(req, res, { publicDir });
       }
-    } catch (err) {
-      console.error('[AgentPipe] Error broadcasting to client:', err);
-      dashboardClients.delete(clientRes);
     }
+    if (!res.headersSent && !res.writableEnded) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: '404 Not Found' }));
+    }
+  });
+
+  // 4. Create HTTP Server instance
+  const server = http.createServer((req, res) => router.handle(req, res));
+
+  // Attach components to server for inspection/customization
+  server.store = store;
+  server.router = router;
+  server.agentController = agentController;
+  server.dashboardController = dashboardController;
+  server.port = port;
+  server.host = host;
+
+  // 5. Clean Teardown hook
+  let isClosed = false;
+  const teardown = () => {
+    if (isClosed) return;
+    isClosed = true;
+    dashboardController.close();
+  };
+
+  server.on('close', teardown);
+
+  const originalClose = server.close.bind(server);
+  server.close = function close(callback) {
+    teardown();
+    if (typeof server.closeAllConnections === 'function') {
+      server.closeAllConnections();
+    }
+    return originalClose(callback);
+  };
+
+  return server;
+}
+
+// Singleton server instance for backward compatibility (unlistened)
+export const server = createAgentPipeServer();
+
+// Direct execution check (e.g. node src/server.js)
+function isDirectExecution() {
+  if (!process.argv[1]) return false;
+  try {
+    return fs.realpathSync(path.resolve(process.argv[1])) === fs.realpathSync(__filename);
+  } catch {
+    return false;
   }
 }
 
-function readJsonBody(req) {
-  return new Promise((resolve, reject) => {
-    let body = '';
-    req.on('data', chunk => {
-      body += chunk;
-      // 10MB safety limit
-      if (body.length > 1e7) {
-        req.destroy();
-        reject(new Error('Payload too large'));
-      }
-    });
-    req.on('end', () => {
-      if (!body.trim()) {
-        resolve({});
-        return;
-      }
-      try {
-        const parsed = JSON.parse(body);
-        resolve(parsed);
-      } catch (err) {
-        reject(err);
-      }
-    });
-    req.on('error', reject);
+if (isDirectExecution()) {
+  const listenPort = process.env.PORT ? Number.parseInt(process.env.PORT, 10) : PORT;
+  server.listen(listenPort, () => {
+    console.log(`AgentPipe server listening on http://localhost:${listenPort}`);
   });
 }
 
-const server = http.createServer(async (req, res) => {
-  // Real-time incoming request logging
-  console.log(`[INCOMING] ${req.method} ${req.url}`);
-
-  // Enable universal CORS for external tools, extensions, and the web dashboard
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
-  res.setHeader('Access-Control-Allow-Headers', '*');
-
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204);
-    return res.end();
-  }
-
-  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  let pathname = url.pathname;
-  if (pathname.length > 1 && pathname.endsWith('/')) {
-    pathname = pathname.replace(/\/+$/, '');
-  }
-
-  try {
-    // OpenAI-compatible models discovery endpoint (/v1/models and /models)
-    if (req.method === 'GET' && (pathname === '/v1/models' || pathname === '/models')) {
-      const modelsResponse = {
-        object: 'list',
-        data: [
-          {
-            id: 'agent-relay',
-            object: 'model'
-          }
-        ]
-      };
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(modelsResponse));
-      return;
-    }
-
-    // Intercept LLM chat completions and hold connection (/v1/chat/completions and /chat/completions)
-    if (req.method === 'POST' && (pathname === '/v1/chat/completions' || pathname === '/chat/completions')) {
-      let data;
-      try {
-        data = await readJsonBody(req);
-      } catch (err) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: `Invalid JSON body: ${err.message}` }));
-        return;
-      }
-
-      const id = `req_${Date.now()}`;
-      store.addRequest(id, req, res, data.messages || [], data.tools || []);
-
-      console.log(`[AgentPipe] Intercepted chat completion request: ${id}`);
-
-      // Broadcast update to all connected dashboard SSE clients
-      broadcastPending();
-
-      // Handle client disconnect or abort
-      req.on('close', () => {
-        if (!res.writableEnded) {
-          console.log(`[AgentPipe] Client disconnected/aborted request: ${id}`);
-          store.removeRequest(id);
-          broadcastPending();
-        }
-      });
-
-      // CRITICAL: Do NOT call res.end() or send headers! Leave the connection hanging.
-      return;
-    }
-
-    // Real-time Server-Sent Events stream for dashboard
-    if (req.method === 'GET' && pathname === '/api/events') {
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*'
-      });
-
-      dashboardClients.add(res);
-      console.log(`[AgentPipe] Dashboard SSE client connected. Total clients: ${dashboardClients.size}`);
-
-      req.on('close', () => {
-        dashboardClients.delete(res);
-        console.log(`[AgentPipe] Dashboard SSE client disconnected. Total clients: ${dashboardClients.size}`);
-      });
-
-      // Immediately send current pending list on connection
-      res.write(`data: ${JSON.stringify(store.getAllPending())}\n\n`);
-      return;
-    }
-
-    // Serve static files from public directory
-    if (req.method === 'GET' && !pathname.startsWith('/api/') && !pathname.startsWith('/v1/')) {
-      return serveStatic(req, res, { publicDir: PUBLIC_DIR });
-    }
-
-    // Get all pending requests for dashboard (fallback / API access)
-    if (req.method === 'GET' && pathname === '/api/pending') {
-      const pending = store.getAllPending();
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(pending));
-      return;
-    }
-
-    // Resolve an intercepted request with user dashboard payload
-    if (req.method === 'POST' && pathname === '/api/resolve') {
-      let body;
-      try {
-        body = await readJsonBody(req);
-      } catch (err) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: `Invalid JSON body: ${err.message}` }));
-        return;
-      }
-
-      const { id, payload } = body;
-      if (!id) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Missing required field: id' }));
-        return;
-      }
-
-      const storedReq = store.getRequest(id);
-      if (!storedReq) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Request not found or already resolved' }));
-        return;
-      }
-
-      // Send SSE response back to the client waiting on POST /v1/chat/completions
-      sendSSEResponse(storedReq.res, payload);
-      store.removeRequest(id);
-
-      console.log(`[AgentPipe] Successfully resolved request: ${id}`);
-
-      // Broadcast updated pending list to all connected dashboard clients
-      broadcastPending();
-
-      // Respond to dashboard API caller
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true }));
-      return;
-    }
-
-    // Cancel/abort an intercepted request
-    if (req.method === 'POST' && pathname === '/api/cancel') {
-      let body;
-      try {
-        body = await readJsonBody(req);
-      } catch (err) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: `Invalid JSON body: ${err.message}` }));
-        return;
-      }
-
-      const { id } = body;
-      if (!id) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Missing required field: id' }));
-        return;
-      }
-
-      const storedReq = store.getRequest(id);
-      if (!storedReq) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Request not found or already resolved' }));
-        return;
-      }
-
-      if (!storedReq.res.headersSent) {
-        storedReq.res.writeHead(200, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-          'Access-Control-Allow-Origin': '*'
-        });
-      }
-
-      // Send a graceful termination SSE chunk to Cline so it stops cleanly without throwing a network error
-      const cancelChunk = {
-        id: 'chatcmpl-' + Date.now(),
-        object: 'chat.completion.chunk',
-        created: Math.floor(Date.now() / 1000),
-        model: 'agent-pipe',
-        choices: [{
-          index: 0,
-          delta: { content: '\n[Task canceled by user via dashboard]' },
-          finish_reason: 'stop'
-        }]
-      };
-
-      storedReq.res.write('data: ' + JSON.stringify(cancelChunk) + '\n\n');
-      storedReq.res.write('data: [DONE]\n\n');
-      storedReq.res.end();
-
-      store.removeRequest(id);
-      console.log(`[AgentPipe] Successfully canceled request: ${id}`);
-
-      broadcastPending();
-
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true, message: 'Request canceled' }));
-      return;
-    }
-
-    // Fallback 404
-    res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: '404 Not Found' }));
-  } catch (err) {
-    console.error('[AgentPipe] Unhandled server error:', err);
-    if (!res.headersSent) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Internal Server Error' }));
-    }
-  }
-});
-
-server.listen(PORT, () => {
-  console.log(`AgentPipe server listening on http://localhost:${PORT}`);
-});
-
-export { server, PORT };
-export default server;
+export default createAgentPipeServer;
