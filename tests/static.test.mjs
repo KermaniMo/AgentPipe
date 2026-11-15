@@ -63,6 +63,11 @@ describe('Streaming Static Asset Handler with Traversal Guard', () => {
     fs.mkdirSync(subDir);
     fs.writeFileSync(path.join(subDir, 'nested.js'), 'export const nested = true;', 'utf8');
 
+    // Create a subfolder with index.html to test directory index resolution when trailing slash is normalized
+    const nestedDir = path.join(tempDir, 'nested-dir');
+    fs.mkdirSync(nestedDir);
+    fs.writeFileSync(path.join(nestedDir, 'index.html'), '<!DOCTYPE html><html><body>Nested Directory Index</body></html>', 'utf8');
+
     // Start HTTP test server serving from tempDir
     const staticMiddleware = createStaticHandler({ publicDir: tempDir });
     server = http.createServer((req, res) => {
@@ -108,6 +113,20 @@ describe('Streaming Static Asset Handler with Traversal Guard', () => {
       assert.strictEqual(res.statusCode, 200);
       assert.strictEqual(res.headers['content-type'], 'text/html');
       assert.ok(res.body.includes('AgentPipe Dashboard'));
+    });
+
+    test('resolves directory request to index.html when trailing slash is normalized (GET /nested-dir)', async () => {
+      const res = await makeRequest('/nested-dir');
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.headers['content-type'], 'text/html');
+      assert.ok(res.body.includes('Nested Directory Index'));
+    });
+
+    test('resolves directory request to index.html with trailing slash (GET /nested-dir/)', async () => {
+      const res = await makeRequest('/nested-dir/');
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.headers['content-type'], 'text/html');
+      assert.ok(res.body.includes('Nested Directory Index'));
     });
   });
 

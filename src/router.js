@@ -119,45 +119,32 @@ export class Router {
   /**
    * Registers a route for a specific method and path (or array of paths).
    *
-   * @param {string} method HTTP method in uppercase or 'ALL'
+   * @param {string} method HTTP method in uppercase
    * @param {string|string[]} path Path or list of paths
    * @param {Function} handler Request handler function (req, res)
-   * @param {{ parseBody?: boolean }} [options]
    */
-  add(method, path, handler, options = {}) {
+  add(method, path, handler) {
     const paths = Array.isArray(path) ? path : [path];
+    const upperMethod = method.toUpperCase();
     for (const p of paths) {
       this._routes.push({
-        method: method.toUpperCase(),
-        path: p === '*' ? '*' : normalizePath(p),
-        handler,
-        options
+        method: upperMethod,
+        path: normalizePath(p),
+        handler
       });
     }
   }
 
-  get(path, handler, options) {
-    this.add('GET', path, handler, options);
+  get(path, handler) {
+    this.add('GET', path, handler);
   }
 
-  post(path, handler, options) {
-    this.add('POST', path, handler, options);
+  post(path, handler) {
+    this.add('POST', path, handler);
   }
 
-  put(path, handler, options) {
-    this.add('PUT', path, handler, options);
-  }
-
-  delete(path, handler, options) {
-    this.add('DELETE', path, handler, options);
-  }
-
-  options(path, handler, options) {
-    this.add('OPTIONS', path, handler, options);
-  }
-
-  all(path, handler, options) {
-    this.add('ALL', path, handler, options);
+  put(path, handler) {
+    this.add('PUT', path, handler);
   }
 
   /**
@@ -194,16 +181,11 @@ export class Router {
     const pathname = normalizePath(parsedUrl.pathname);
     req.pathname = pathname;
     req.query = Object.fromEntries(parsedUrl.searchParams.entries());
-    req.searchParams = parsedUrl.searchParams;
 
     const method = (req.method || 'GET').toUpperCase();
 
     // Match route by method and normalized path
-    const matched = this._routes.find(route => {
-      const methodMatches = route.method === 'ALL' || route.method === method;
-      const pathMatches = route.path === '*' || route.path === pathname;
-      return methodMatches && pathMatches;
-    });
+    const matched = this._routes.find(route => route.method === method && route.path === pathname);
 
     if (!matched) {
       if (this._notFoundHandler) {
@@ -214,11 +196,8 @@ export class Router {
       return;
     }
 
-    // Auto-parse JSON body for mutating methods unless explicitly disabled
-    const isMutating = ['POST', 'PUT', 'PATCH'].includes(method);
-    const shouldParseBody = matched.options?.parseBody !== false;
-
-    if (isMutating && shouldParseBody) {
+    // Auto-parse JSON body for mutating methods
+    if (method === 'POST' || method === 'PUT') {
       try {
         req.body = await parseJsonBody(req, { limit: this._bodyLimit });
       } catch (err) {
@@ -249,27 +228,12 @@ export class Router {
 
 /**
  * Creates and returns a lightweight Router instance.
- * The returned router instance is also callable as a request listener.
  *
  * @param {{ bodyLimit?: number }} [options]
  * @returns {Router}
  */
 export function createRouter(options) {
-  const router = new Router(options);
-  const routerFn = (req, res) => router.handle(req, res);
-
-  // Expose router methods on the callable function
-  routerFn.get = router.get.bind(router);
-  routerFn.post = router.post.bind(router);
-  routerFn.put = router.put.bind(router);
-  routerFn.delete = router.delete.bind(router);
-  routerFn.options = router.options.bind(router);
-  routerFn.all = router.all.bind(router);
-  routerFn.add = router.add.bind(router);
-  routerFn.handle = router.handle.bind(router);
-  routerFn.setNotFoundHandler = router.setNotFoundHandler.bind(router);
-
-  return routerFn;
+  return new Router(options);
 }
 
 export default createRouter;

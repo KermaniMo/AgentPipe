@@ -145,6 +145,7 @@ describe('Agent Controller: Model Discovery and Chat Interception Flow', () => {
       assert.deepStrictEqual(interceptedReq.messages, sampleMessages);
       assert.deepStrictEqual(interceptedReq.tools, sampleTools);
       assert.strictEqual(store.getRequest(interceptedReq.id), interceptedReq);
+      assert.strictEqual(interceptedReq.req.listenerCount('close'), 1, 'should have exactly 1 close listener without duplicate bindings');
 
       // Clean up client request
       req.destroy();
@@ -235,10 +236,11 @@ describe('Agent Controller: Model Discovery and Chat Interception Flow', () => {
     assert.strictEqual(abortedEvent.req.id, interceptedReq.id);
     assert.strictEqual(interceptedReq.status, 'ABORTED');
 
-    // Verify cleaned up: not present in getAllPending()
+    // Verify cleaned up: not present in getAllPending() or getRequest()
     const pendingList = store.getAllPending();
     const isStillPending = pendingList.some(r => r.id === interceptedReq.id);
     assert.strictEqual(isStillPending, false, 'aborted request must not appear in getAllPending()');
+    assert.strictEqual(store.getRequest(interceptedReq.id), undefined, 'aborted request must be removed from store');
   });
 
   test('Client disconnect via req.emit(\'close\') transitions request to ABORTED and cleans up', async () => {
@@ -279,6 +281,7 @@ describe('Agent Controller: Model Discovery and Chat Interception Flow', () => {
     const abortedEvent = await abortedPromise;
     assert.strictEqual(abortedEvent.req.id, interceptedReq.id);
     assert.strictEqual(interceptedReq.status, 'ABORTED');
+    assert.strictEqual(store.getRequest(interceptedReq.id), undefined, 'aborted request must be removed from store');
 
     clientReq.destroy();
   });

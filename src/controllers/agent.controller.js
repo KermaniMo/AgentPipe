@@ -68,31 +68,8 @@ export function createChatCompletionsHandler(store = defaultStore) {
       tools
     });
 
-    // Listen for client socket disconnect:
-    // If the client disconnects while the request is pending, transition to ABORTED and notify the store.
-    const onDisconnect = () => {
-      if (interceptedRequest.status === REQUEST_STATUS.PENDING) {
-        interceptedRequest.abort();
-      }
-    };
-
-    if (req && typeof req.once === 'function') {
-      req.once('close', onDisconnect);
-    }
-    if (res && typeof res.once === 'function') {
-      res.once('close', onDisconnect);
-    }
-
-    // Clean up disconnect listeners when the request transitions out of PENDING
-    interceptedRequest.once('stateChange', () => {
-      if (req && typeof req.removeListener === 'function') {
-        req.removeListener('close', onDisconnect);
-      }
-      if (res && typeof res.removeListener === 'function') {
-        res.removeListener('close', onDisconnect);
-      }
-    });
-
+    // InterceptedRequest encapsulates client socket disconnect handling cooperatively,
+    // transitioning to ABORTED and triggering store cleanup without duplicate event bindings.
     store.addRequest(interceptedRequest);
     // Indefinite Hold: Do NOT send response headers or call res.end().
   };

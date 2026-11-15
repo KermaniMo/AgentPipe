@@ -159,7 +159,7 @@ describe('RequestStore Domain Entity', () => {
     assert.strictEqual(events[0].req.reason, 'Operator declined prompt');
   });
 
-  test('subscribes to lifecycle events and emits request:aborted when client disconnects', () => {
+  test('subscribes to lifecycle events and emits request:aborted when client disconnects, cleanly removing from store', () => {
     const events = [];
     store.on('request:aborted', (req, data) => {
       events.push({ req, data });
@@ -175,6 +175,14 @@ describe('RequestStore Domain Entity', () => {
     assert.strictEqual(events.length, 1, 'request:aborted should fire once');
     assert.strictEqual(events[0].req.id, 'req_abort_flow');
     assert.strictEqual(events[0].req.status, REQUEST_STATUS.ABORTED);
+    assert.strictEqual(store.getRequest('req_abort_flow'), undefined, 'aborted request must be cleanly removed from store');
+    assert.strictEqual(store.size, 0, 'store size must be 0 after aborted request is removed');
+  });
+
+  test('does not mutate request with strange request.request property', () => {
+    const req = new InterceptedRequest({ id: 'req_mutation_check' });
+    store.addRequest(req);
+    assert.strictEqual(req.request, undefined, 'request.request must not exist');
   });
 
   test('getAllPending(): returns array of sanitized representations (toJSON) and filters non-pending', () => {

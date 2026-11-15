@@ -91,24 +91,46 @@ export function createAgentPipeServer(options = {}) {
   return server;
 }
 
-// Singleton server instance for backward compatibility (unlistened)
-export const server = createAgentPipeServer();
+let _defaultServerInstance = null;
 
-// Direct execution check (e.g. node src/server.js)
-function isDirectExecution() {
-  if (!process.argv[1]) return false;
-  try {
-    return fs.realpathSync(path.resolve(process.argv[1])) === fs.realpathSync(__filename);
-  } catch {
-    return false;
+/**
+ * Returns a lazily instantiated unlistened server instance for backward compatibility.
+ * Zero side effects on module import.
+ *
+ * @returns {import('node:http').Server}
+ */
+export function getServer() {
+  if (!_defaultServerInstance) {
+    _defaultServerInstance = createAgentPipeServer();
   }
+  return _defaultServerInstance;
 }
 
-if (isDirectExecution()) {
-  const listenPort = process.env.PORT ? Number.parseInt(process.env.PORT, 10) : PORT;
-  server.listen(listenPort, () => {
-    console.log(`AgentPipe server listening on http://localhost:${listenPort}`);
-  });
-}
+/**
+ * Lazy proxy to unlistened server instance for backward compatibility.
+ * Ensures zero side-effects on module import (deferred instantiation on demand).
+ */
+export const server = new Proxy({}, {
+  get(target, prop, receiver) {
+    const instance = getServer();
+    const value = Reflect.get(instance, prop, receiver);
+    if (typeof value === 'function') {
+      return value.bind(instance);
+    }
+    return value;
+  },
+  set(target, prop, value, receiver) {
+    const instance = getServer();
+    return Reflect.set(instance, prop, value, receiver);
+  },
+  has(target, prop) {
+    const instance = getServer();
+    return Reflect.has(instance, prop);
+  },
+  getPrototypeOf() {
+    const instance = getServer();
+    return Reflect.getPrototypeOf(instance);
+  }
+});
 
 export default createAgentPipeServer;

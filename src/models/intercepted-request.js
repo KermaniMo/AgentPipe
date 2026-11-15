@@ -42,13 +42,19 @@ export class InterceptedRequest extends EventEmitter {
     this.createdAt = createdAt || Date.now();
     this.status = REQUEST_STATUS.PENDING;
 
+    const onClose = () => {
+      if (this.status === REQUEST_STATUS.PENDING) {
+        this.abort();
+      }
+    };
+
     if (this.req && typeof this.req.once === 'function') {
-      this._onReqClose = () => {
-        if (this.status === REQUEST_STATUS.PENDING) {
-          this.abort();
-        }
-      };
+      this._onReqClose = onClose;
       this.req.once('close', this._onReqClose);
+    }
+    if (this.res && typeof this.res.once === 'function') {
+      this._onResClose = onClose;
+      this.res.once('close', this._onResClose);
     }
   }
 
@@ -56,6 +62,10 @@ export class InterceptedRequest extends EventEmitter {
     if (this.req && typeof this.req.removeListener === 'function' && this._onReqClose) {
       this.req.removeListener('close', this._onReqClose);
       this._onReqClose = null;
+    }
+    if (this.res && typeof this.res.removeListener === 'function' && this._onResClose) {
+      this.res.removeListener('close', this._onResClose);
+      this._onResClose = null;
     }
   }
 
