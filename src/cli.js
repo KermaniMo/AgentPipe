@@ -195,7 +195,25 @@ function isDirectExecution() {
 
 if (isDirectExecution()) {
   main().catch((err) => {
-    console.error('[AgentPipe] CLI error:', err);
+    if (err.code === 'EACCES') {
+      const port = err.port || resolvePort(process.argv.slice(2));
+      console.error(`\n[AgentPipe] Permission denied on port ${port} (EACCES).`);
+      if (process.platform === 'win32') {
+        console.error(`[AgentPipe] On Windows, port ${port} is often inside a reserved port range excluded by Hyper-V / WSL / WinNAT.`);
+        console.error(`[AgentPipe] Solutions:`);
+        console.error(`  1. Use another port: agentpipe start --port 4700`);
+        console.error(`  2. Or release the reserved port range (in Administrator PowerShell):`);
+        console.error(`     net stop winnat; net start winnat\n`);
+      } else {
+        console.error(`[AgentPipe] Use another port: agentpipe start --port 4700\n`);
+      }
+    } else if (err.code === 'EADDRINUSE') {
+      const port = err.port || resolvePort(process.argv.slice(2));
+      console.error(`\n[AgentPipe] Port ${port} is already in use by another process (EADDRINUSE).`);
+      console.error(`[AgentPipe] Use another port: agentpipe start --port 4700\n`);
+    } else {
+      console.error('[AgentPipe] CLI error:', err);
+    }
     process.exitCode = 1;
   });
 }
