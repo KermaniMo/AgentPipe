@@ -60,6 +60,56 @@ test('Sanitizer: detects malformed JSON attempt', () => {
   assert.ok(result.error);
 });
 
+test('Sanitizer: conversational text with non-JSON code blocks (python, bash) stays in text mode', () => {
+  const input = `Here is an explanation of TDD:
+\`\`\`python
+def test_add():
+    assert add(2, 3) == 5
+\`\`\`
+And you can run it using:
+\`\`\`bash
+pytest
+\`\`\`
+Hope this helps!`;
+  const result = sanitizeResponseInput(input);
+  assert.strictEqual(result.mode, 'text');
+  assert.strictEqual(result.payload, input);
+});
+
+test('Sanitizer: multilingual text with python code blocks stays in text mode', () => {
+  const input = `## TDD چیست؟
+توسعه تستمحور:
+\`\`\`python
+def add(a, b):
+    return a + b
+\`\`\`
+تست را دوباره اجرا کن.`;
+  const result = sanitizeResponseInput(input);
+  assert.strictEqual(result.mode, 'text');
+  assert.strictEqual(result.payload, input);
+});
+
+test('Sanitizer: mixed response with python snippet and json tool call extracts tool call', () => {
+  const input = `Here is how the python function looks:
+\`\`\`python
+def test_foo(): pass
+\`\`\`
+Now let me execute it for you:
+\`\`\`json
+{
+  "name": "execute_command",
+  "arguments": {
+    "command": "python test.py"
+  }
+}
+\`\`\``;
+  const result = sanitizeResponseInput(input);
+  assert.strictEqual(result.mode, 'tool');
+  assert.strictEqual(result.toolName, 'execute_command');
+  const parsed = JSON.parse(result.payload);
+  assert.strictEqual(parsed.tool_calls[0].function.name, 'execute_command');
+});
+
 test('Formatters: getLatestUserMessage', () => {
   const messages = [
     { role: 'system', content: 'You are helpful' },

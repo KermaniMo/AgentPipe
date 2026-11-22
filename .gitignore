@@ -146,3 +146,8 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+
+# Local AI Agent configuration
+/.agents/
+/.scratch/
